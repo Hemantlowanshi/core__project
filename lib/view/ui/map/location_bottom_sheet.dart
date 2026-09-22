@@ -29,7 +29,7 @@ class LocationBottomSheet extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: AppColors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -46,7 +46,7 @@ class LocationBottomSheet extends StatelessWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.grey.withOpacity(0.4),
+                    color: AppColors.grey.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -92,7 +92,7 @@ class LocationBottomSheet extends StatelessWidget {
                     textColor: AppColors.grey,
                   ),
                   filled: true,
-                  fillColor: AppColors.ultraLightGrey.withOpacity(0.6),
+                  fillColor: AppColors.ultraLightGrey.withValues(alpha: 0.6),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -111,7 +111,7 @@ class LocationBottomSheet extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onSave,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6B4EE6),
+                    backgroundColor: AppColors.primaryPurple,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(26),

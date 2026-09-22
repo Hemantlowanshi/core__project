@@ -1,5 +1,6 @@
 import 'package:get_it/get_it.dart';
 import '../../view_model/home_view_model/home_viewmodel.dart';
+import '../../view_model/map_view_model/map_viewmodel.dart';
 import '../network/api_client.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/product_repository_impl.dart';
@@ -24,5 +25,10 @@ void setupLocator() {
   // Register HomeViewModel
   locator.registerLazySingleton<HomeViewModel>(
     () => HomeViewModel(locator<ProductRepository>()),
+  );
+
+  // Register MapViewModel
+  locator.registerFactory<MapViewModel>(
+    () => MapViewModel(),
   );
 }

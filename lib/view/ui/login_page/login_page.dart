@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -13,16 +13,19 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
+  final TextEditingController _phoneController =
+  TextEditingController();
+
+  final TextEditingController _otpController =
+  TextEditingController();
+
+  static const Color _primaryBlue = Color(0xFF4F75E9);
 
   bool _otpSent = false;
   bool _isLoading = false;
 
   String? _verificationId;
   int? _resendToken;
-
-  final Color primaryBlue = const Color(0xFF4F75E9);
 
   @override
   void dispose() {
@@ -31,18 +34,15 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // ============================================================
+  // SEND OTP
+  // ============================================================
+
   Future<void> _sendOtp({bool isResend = false}) async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_validatePhone()) return;
+    if (_isLoading) return;
 
-    if (_isLoading) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
+    _setLoading(true);
 
     final phoneNumber = '+91${_phoneController.text.trim()}';
 
@@ -50,62 +50,14 @@ class _LoginPageState extends State<LoginPage> {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
 
-        verificationCompleted:
-            (PhoneAuthCredential credential) async {
-          try {
-            await FirebaseAuth.instance.signInWithCredential(
-              credential,
-            );
+        // Android may automatically verify the SMS.
+        verificationCompleted: _verificationCompleted,
 
-            if (!mounted) return;
+        // OTP sending/verification failed.
+        verificationFailed: _verificationFailed,
 
-            await _loginSuccess();
-          } on FirebaseAuthException catch (e) {
-            if (!mounted) return;
-
-            setState(() {
-              _isLoading = false;
-            });
-
-            _showError(
-              e.message ?? 'Automatic verification failed.',
-            );
-          }
-        },
-
-        verificationFailed: (FirebaseAuthException e) {
-          if (!mounted) return;
-
-          setState(() {
-            _isLoading = false;
-          });
-
-          String message;
-
-          switch (e.code) {
-            case 'invalid-phone-number':
-              message = 'The phone number is invalid.';
-              break;
-
-            case 'too-many-requests':
-              message =
-              'Too many requests. Please try again later.';
-              break;
-
-            case 'quota-exceeded':
-              message =
-              'SMS quota exceeded. Please try again later.';
-              break;
-
-            default:
-              message =
-                  e.message ?? 'Failed to send OTP.';
-          }
-
-          _showError(message);
-        },
-
-        codeSent: (String verificationId, int? resendToken) {
+        // OTP successfully sent.
+        codeSent: (verificationId, resendToken) {
           if (!mounted) return;
 
           setState(() {
@@ -122,18 +74,18 @@ class _LoginPageState extends State<LoginPage> {
           );
         },
 
-        codeAutoRetrievalTimeout: (String verificationId) {
+        // Called when automatic SMS retrieval times out.
+        codeAutoRetrievalTimeout: (verificationId) {
           _verificationId = verificationId;
         },
 
-        forceResendingToken: isResend ? _resendToken : null,
+        forceResendingToken:
+        isResend ? _resendToken : null,
       );
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+      _setLoading(false);
 
       _showError(
         'Something went wrong. Please try again.',
@@ -141,27 +93,78 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // ============================================================
+  // AUTOMATIC OTP VERIFICATION
+  // ============================================================
+
+  Future<void> _verificationCompleted(
+      PhoneAuthCredential credential,
+      ) async {
+    try {
+      await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+
+      if (!mounted) return;
+
+      await _loginSuccess();
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+
+      _setLoading(false);
+
+      _showError(
+        error.message ??
+            'Automatic verification failed.',
+      );
+    }
+  }
+
+  // ============================================================
+  // VERIFICATION FAILED
+  // ============================================================
+
+  void _verificationFailed(
+      FirebaseAuthException error,
+      ) {
+    if (!mounted) return;
+
+    _setLoading(false);
+
+    _showError(
+      _getFirebaseErrorMessage(error),
+    );
+  }
+
+  // ============================================================
+  // VERIFY MANUAL OTP
+  // ============================================================
+
   Future<void> _verifyOtp() async {
     final otp = _otpController.text.trim();
 
     if (otp.length != 6) {
-      _showError('Please enter a valid 6-digit OTP.');
+      _showError(
+        'Please enter a valid 6-digit OTP.',
+      );
       return;
     }
 
     if (_verificationId == null) {
       _showError(
-        'Verification session expired. Please request a new OTP.',
+        'Verification session expired. '
+            'Please request a new OTP.',
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (_isLoading) return;
+
+    _setLoading(true);
 
     try {
-      final credential = PhoneAuthProvider.credential(
+      final credential =
+      PhoneAuthProvider.credential(
         verificationId: _verificationId!,
         smsCode: otp,
       );
@@ -173,41 +176,28 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       await _loginSuccess();
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException catch (error) {
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+      _setLoading(false);
 
-      String message;
-
-      switch (e.code) {
-        case 'invalid-verification-code':
-          message = 'Incorrect OTP. Please try again.';
-          break;
-
-        case 'session-expired':
-          message =
-          'OTP expired. Please request a new OTP.';
-          break;
-
-        default:
-          message =
-              e.message ?? 'OTP verification failed.';
-      }
-
-      _showError(message);
-    } catch (e) {
+      _showError(
+        _getOtpErrorMessage(error),
+      );
+    } catch (error) {
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+      _setLoading(false);
 
-      _showError('OTP verification failed.');
+      _showError(
+        'OTP verification failed.',
+      );
     }
   }
+
+  // ============================================================
+  // LOGIN SUCCESS
+  // ============================================================
 
   Future<void> _loginSuccess() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -215,11 +205,12 @@ class _LoginPageState extends State<LoginPage> {
     if (user == null) {
       if (!mounted) return;
 
-      setState(() {
-        _isLoading = false;
-      });
+      _setLoading(false);
 
-      _showError('User authentication failed.');
+      _showError(
+        'User authentication failed.',
+      );
+
       return;
     }
 
@@ -230,9 +221,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+    _setLoading(false);
 
     _showMessage(
       'Phone number verified successfully',
@@ -246,13 +235,21 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Future<void> _resendOtp() async {
-    if (_isLoading) {
-      return;
-    }
+  // ============================================================
+  // RESEND OTP
+  // ============================================================
 
-    await _sendOtp(isResend: true);
+  Future<void> _resendOtp() async {
+    if (_isLoading) return;
+
+    await _sendOtp(
+      isResend: true,
+    );
   }
+
+  // ============================================================
+  // CHANGE PHONE NUMBER
+  // ============================================================
 
   void _changePhoneNumber() {
     setState(() {
@@ -263,26 +260,146 @@ class _LoginPageState extends State<LoginPage> {
     });
   }
 
+  // ============================================================
+  // VALIDATION
+  // ============================================================
+
+  bool _validatePhone() {
+    return _formKey.currentState?.validate() ?? false;
+  }
+
+  // ============================================================
+  // LOADING
+  // ============================================================
+
+  void _setLoading(bool value) {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = value;
+    });
+  }
+
+  // ============================================================
+  // FIREBASE ERROR MESSAGE
+  // ============================================================
+
+  String _getFirebaseErrorMessage(
+      FirebaseAuthException error,
+      ) {
+    switch (error.code) {
+      case 'invalid-phone-number':
+        return 'The phone number is invalid.';
+
+      case 'too-many-requests':
+        return 'Too many requests. Please try again later.';
+
+      case 'quota-exceeded':
+        return 'SMS quota exceeded. Please try again later.';
+
+      default:
+        return error.message ?? 'Failed to send OTP.';
+    }
+  }
+
+  // ============================================================
+  // OTP ERROR MESSAGE
+  // ============================================================
+
+  String _getOtpErrorMessage(
+      FirebaseAuthException error,
+      ) {
+    switch (error.code) {
+      case 'invalid-verification-code':
+        return 'Incorrect OTP. Please try again.';
+
+      case 'session-expired':
+        return 'OTP expired. Please request a new OTP.';
+
+      default:
+        return error.message ??
+            'OTP verification failed.';
+    }
+  }
+
+  // ============================================================
+  // SNACKBAR
+  // ============================================================
+
   void _showMessage(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
   }
 
   void _showError(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+  }
+
+  // ============================================================
+  // INPUT DECORATION
+  // ============================================================
+
+  InputDecoration _inputDecoration({
+    required String hintText,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      counterText: '',
+      hintText: hintText,
+      hintStyle: TextStyle(
+        color: Colors.grey.shade400,
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: Colors.grey.shade500,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Colors.grey.shade300,
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Colors.grey.shade300,
+        ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Colors.grey.shade200,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: _primaryBlue,
+          width: 1.5,
+        ),
       ),
     );
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -290,269 +407,286 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
-            horizontal: 24.0,
-            vertical: 40.0,
+            horizontal: 24,
+            vertical: 40,
           ),
           child: Form(
             key: _formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
 
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.phone_android_outlined,
-                    color: primaryBlue,
-                    size: 32,
-                  ),
-                ),
+                _buildPhoneIcon(),
 
                 const SizedBox(height: 24),
 
-                Text(
-                  _otpSent
-                      ? "Verify Your Number"
-                      : "Welcome Back!",
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
+                _buildTitle(),
 
                 const SizedBox(height: 8),
 
-                Text(
-                  _otpSent
-                      ? "Enter the 6-digit OTP sent to your phone number."
-                      : "Enter your phone number to sign in and continue.",
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
+                _buildSubtitle(),
 
                 const SizedBox(height: 40),
 
-                const Text(
-                  "Phone Number",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
+                _buildPhoneLabel(),
 
                 const SizedBox(height: 8),
 
-                TextFormField(
-                  controller: _phoneController,
-                  enabled: !_otpSent && !_isLoading,
-                  keyboardType: TextInputType.phone,
-                  maxLength: 10,
-                  decoration: InputDecoration(
-                    counterText: '',
-                    hintText: 'Enter phone number',
-                    hintStyle: TextStyle(
-                      color: Colors.grey.shade400,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.phone_outlined,
-                      color: Colors.grey.shade500,
-                    ),
-                    prefixText: '+91  ',
-                    prefixStyle: const TextStyle(
-                      color: Colors.black87,
-                      fontSize: 16,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.grey.shade300,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.grey.shade300,
-                      ),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: Colors.grey.shade200,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: primaryBlue,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-
-                    if (value.length != 10) {
-                      return 'Please enter a valid 10-digit phone number';
-                    }
-
-                    return null;
-                  },
-                ),
+                _buildPhoneField(),
 
                 if (_otpSent) ...[
                   const SizedBox(height: 20),
-
-                  const Text(
-                    "OTP",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  TextFormField(
-                    controller: _otpController,
-                    enabled: !_isLoading,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    autofillHints: const [
-                      AutofillHints.oneTimeCode,
-                    ],
-                    decoration: InputDecoration(
-                      counterText: '',
-                      hintText: 'Enter 6-digit OTP',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.lock_outline,
-                        color: Colors.grey.shade500,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.grey.shade300,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.grey.shade300,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: primaryBlue,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  Row(
-                    mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed:
-                        _isLoading ? null : _resendOtp,
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                        ),
-                        child: Text(
-                          "Resend OTP",
-                          style: TextStyle(
-                            color: primaryBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed:
-                        _isLoading
-                            ? null
-                            : _changePhoneNumber,
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                        ),
-                        child: Text(
-                          "Change Phone Number",
-                          style: TextStyle(
-                            color: primaryBlue,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _buildOtpSection(),
                 ],
 
                 const SizedBox(height: 30),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : (_otpSent
-                        ? _verifyOtp
-                        : _sendOtp),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryBlue,
-                      disabledBackgroundColor:
-                      primaryBlue.withOpacity(0.6),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                        BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isLoading
-                        ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child:
-                      CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                        : Text(
-                      _otpSent
-                          ? "Verify OTP"
-                          : "Send OTP",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
+                _buildMainButton(),
 
                 const SizedBox(height: 30),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // PHONE ICON
+  // ============================================================
+
+  Widget _buildPhoneIcon() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _primaryBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Icon(
+        Icons.phone_android_outlined,
+        color: _primaryBlue,
+        size: 32,
+      ),
+    );
+  }
+
+  // ============================================================
+  // TITLE
+  // ============================================================
+
+  Widget _buildTitle() {
+    return Text(
+      _otpSent
+          ? 'Verify Your Number'
+          : 'Welcome Back!',
+      style: const TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: Colors.black87,
+      ),
+    );
+  }
+
+  // ============================================================
+  // SUBTITLE
+  // ============================================================
+
+  Widget _buildSubtitle() {
+    return Text(
+      _otpSent
+          ? 'Enter the 6-digit OTP sent to your phone number.'
+          : 'Enter your phone number to sign in and continue.',
+      style: TextStyle(
+        fontSize: 15,
+        color: Colors.grey.shade600,
+      ),
+    );
+  }
+
+  // ============================================================
+  // PHONE LABEL
+  // ============================================================
+
+  Widget _buildPhoneLabel() {
+    return const Text(
+      'Phone Number',
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.black87,
+      ),
+    );
+  }
+
+  // ============================================================
+  // PHONE FIELD
+  // ============================================================
+
+  Widget _buildPhoneField() {
+    return TextFormField(
+      controller: _phoneController,
+      enabled: !_otpSent && !_isLoading,
+      keyboardType: TextInputType.phone,
+      maxLength: 10,
+      decoration: _inputDecoration(
+        hintText: 'Enter phone number',
+        icon: Icons.phone_outlined,
+      ).copyWith(
+        prefixText: '+91  ',
+        prefixStyle: const TextStyle(
+          color: Colors.black87,
+          fontSize: 16,
+        ),
+      ),
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter your phone number';
+        }
+
+        if (value.length != 10) {
+          return 'Please enter a valid 10-digit phone number';
+        }
+
+        return null;
+      },
+    );
+  }
+
+  // ============================================================
+  // OTP SECTION
+  // ============================================================
+
+  Widget _buildOtpSection() {
+    return Column(
+      crossAxisAlignment:
+      CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'OTP',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        _buildOtpField(),
+
+        const SizedBox(height: 12),
+
+        _buildOtpActions(),
+      ],
+    );
+  }
+
+  // ============================================================
+  // OTP FIELD
+  // ============================================================
+
+  Widget _buildOtpField() {
+    return TextFormField(
+      controller: _otpController,
+      enabled: !_isLoading,
+      keyboardType: TextInputType.number,
+      maxLength: 6,
+      autofillHints: const [
+        AutofillHints.oneTimeCode,
+      ],
+      decoration: _inputDecoration(
+        hintText: 'Enter 6-digit OTP',
+        icon: Icons.lock_outline,
+      ),
+    );
+  }
+
+  // ============================================================
+  // OTP ACTIONS
+  // ============================================================
+
+  Widget _buildOtpActions() {
+    return Row(
+      mainAxisAlignment:
+      MainAxisAlignment.spaceBetween,
+      children: [
+        TextButton(
+          onPressed:
+          _isLoading ? null : _resendOtp,
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+          ),
+          child: const Text(
+            'Resend OTP',
+            style: TextStyle(
+              color: _primaryBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed:
+          _isLoading ? null : _changePhoneNumber,
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+          ),
+          child: const Text(
+            'Change Phone Number',
+            style: TextStyle(
+              color: _primaryBlue,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // MAIN BUTTON
+  // ============================================================
+
+  Widget _buildMainButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: _isLoading
+            ? null
+            : (_otpSent
+            ? _verifyOtp
+            : _sendOtp),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primaryBlue,
+          disabledBackgroundColor:
+          _primaryBlue.withOpacity(0.6),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: _isLoading
+            ? const SizedBox(
+          height: 22,
+          width: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
+          ),
+        )
+            : Text(
+          _otpSent
+              ? 'Verify OTP'
+              : 'Send OTP',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
       ),
