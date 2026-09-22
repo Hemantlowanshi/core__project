@@ -1,3 +1,4 @@
+import 'package:core_project/core/di/locator.dart';
 import 'package:core_project/view/ui/splash/splash_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  setupLocator();
   runApp(const MyApp());
 }
 

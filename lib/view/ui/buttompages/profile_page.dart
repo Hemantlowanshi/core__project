@@ -1,5 +1,6 @@
 import 'package:core_project/core/sessions/auth_session.dart';
 import 'package:core_project/core/widgets/profile_widgets.dart';
+import 'package:core_project/view/ui/map/select_location_screen.dart';
 import 'package:core_project/view/ui/onboarding_page/onboarding_page.dart';
 import 'package:flutter/material.dart';
 
@@ -73,6 +74,18 @@ class ProfilePage extends StatelessWidget {
               title: const Text('Edit Profile Page'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {},
+            ),
+
+            ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: const Text('Delivery Addresses'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
+                );
+              },
             ),
 
             ListTile(

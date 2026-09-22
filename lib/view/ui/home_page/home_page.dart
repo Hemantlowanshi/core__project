@@ -1,11 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:core_project/core/di/locator.dart';
 import 'package:core_project/core/services/recently_viewed_service.dart';
+import 'package:core_project/view_model/home_view_model/home_viewmodel.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/color/app_color.dart';
 import '../../../core/theme/style/theme_style.dart';
 import '../../../data/models/product_model.dart';
-import '../../../core/services/product_service.dart';
 import '../product_detail/product_detail_page.dart';
 
 class ECommerceHomePage extends StatefulWidget {
@@ -27,8 +28,8 @@ class _ECommerceHomePageState extends State<ECommerceHomePage> {
   @override
   void initState() {
     super.initState();
-    _productsFuture = ProductService().fetchProducts();
-    _categoriesFuture = ProductService().fetchCategories();
+    _productsFuture = locator<HomeViewModel>().fetchProducts();
+    _categoriesFuture = locator<HomeViewModel>().fetchCategories();
     _recentlyViewedFuture = RecentlyViewedService.getRecentlyViewed();
     _hotSalesScrollController.addListener(() {
       final offset = _hotSalesScrollController.offset;
@@ -44,9 +45,9 @@ class _ECommerceHomePageState extends State<ECommerceHomePage> {
   void _onSearch(String query) {
     setState(() {
       if (query.trim().isEmpty) {
-        _productsFuture = ProductService().fetchProducts();
+        _productsFuture = locator<HomeViewModel>().fetchProducts();
       } else {
-        _productsFuture = ProductService().searchProducts(query.trim());
+        _productsFuture = locator<HomeViewModel>().searchProducts(query.trim());
       }
     });
   }
@@ -55,9 +56,9 @@ class _ECommerceHomePageState extends State<ECommerceHomePage> {
     setState(() {
       _selectedCategoryIndex = index;
       if (index == 0 || category.toLowerCase() == 'all') {
-        _productsFuture = ProductService().fetchProducts();
+        _productsFuture = locator<HomeViewModel>().fetchProducts();
       } else {
-        _productsFuture = ProductService().fetchProductsByCategory(category);
+        _productsFuture = locator<HomeViewModel>().fetchProductsByCategory(category);
       }
     });
   }
@@ -72,8 +73,8 @@ class _ECommerceHomePageState extends State<ECommerceHomePage> {
     setState(() {
       _selectedCategoryIndex = 0;
       _searchController.clear();
-      _productsFuture = ProductService().fetchProducts();
-      _categoriesFuture = ProductService().fetchCategories();
+      _productsFuture = locator<HomeViewModel>().fetchProducts();
+      _categoriesFuture = locator<HomeViewModel>().fetchCategories();
       _recentlyViewedFuture = RecentlyViewedService.getRecentlyViewed();
     });
     await Future.wait([_productsFuture, _categoriesFuture, _recentlyViewedFuture]);
@@ -694,10 +695,10 @@ class RecentCard extends StatelessWidget {
                   ),
                   errorWidget: (context, url, error) =>
                       const Icon(Icons.error),
-                ),
+                    ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 5),
             Text(
               product.title,
               maxLines: 1,
